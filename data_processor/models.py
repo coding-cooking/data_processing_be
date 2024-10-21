@@ -1,7 +1,6 @@
 from django.db import models
 
-# Create your models here.
-class UploadedFile(models.Model):
-    file = models.FileField(upload_to='uploads/')
-    processed = models.BooleanField(default=False)
-    timestamp = models.DateTimeField(auto_now_add=True)
+class ProcessedFile(models.Model):
+    file = models.FileField(upload_to='process/')
+    processed_data = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
