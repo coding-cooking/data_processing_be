@@ -6,7 +6,7 @@ from django.shortcuts import render
 import pandas as pd
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .infer_data_types import infer_and_convert_data_types, analyze_column_types, NumpyEncoder
+from .utils import infer_and_convert_data_types, analyze_column_types, NumpyEncoder
 from .models import ProcessedFile
 import json
 from django.core.serializers.json import DjangoJSONEncoder
@@ -24,10 +24,6 @@ class ProcessDataView(APIView):
             try:
                 if file.name.endswith('.csv'):
                     df = pd.read_csv(file)
-
-                    # a test
-                    # for col in df.columns:
-                    #     return Response({'message': col},status=status.HTTP_200_OK)
                 elif file.name.endswith(('.xls', '.xlsx')):
                     df = pd.read_excel(file)
                 else:
@@ -40,9 +36,6 @@ class ProcessDataView(APIView):
             original_analysis = analyze_column_types(df)
             df = infer_and_convert_data_types(df)
             inferred_analysis = analyze_column_types(df)
-
-            json_result = df.to_json(orient='records')
-            # return JsonResponse({'data': json_result}, safe=False)
             
             # Prepare the response data
             response_data = {
@@ -68,12 +61,5 @@ class ProcessDataView(APIView):
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON: {str(e)}")
                 return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
-            # # Call the data type inference function
-            # processed_df = infer_and_convert_data_types(df)
-            
-            # # Convert processed dataframe to JSON
-            # json_result = processed_df.to_json(orient='records')
-            
-            # return JsonResponse({'data': json_result}, safe=False)
         
         return JsonResponse({'error': 'File not uploaded'}, status=400)
