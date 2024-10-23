@@ -21,6 +21,8 @@ def infer_and_convert_data_types(df):
         if df[col].isnull().all():
             continue  # Keep as is if all values are null
 
+        #如果有空行空列要删除，合并单元格的内容咋处理，再看看处理数据别人咋考虑的
+
         # Attempt to convert to numeric
         numeric_data = pd.to_numeric(df[col], errors='coerce')
         if not numeric_data.isnull().all():
