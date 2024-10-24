@@ -34,14 +34,14 @@ class ProcessDataView(APIView):
             
             # Analyze and process the data
             original_analysis = analyze_column_types(df)
-            df = infer_and_convert_data_types(df)
-            inferred_analysis = analyze_column_types(df)
+            processed_df = infer_and_convert_data_types(df)
+            inferred_analysis = analyze_column_types(processed_df)
             
             # Prepare the response data
             response_data = {
                 'original_analysis': original_analysis,
                 'inferred_analysis': inferred_analysis,
-                'data_sample': df.head(10).to_dict(orient='records')
+                'data_sample': processed_df.head(10).to_dict(orient='records')
             }
             try:
                 json_data = json.dumps(response_data, cls=DjangoJSONEncoder)
