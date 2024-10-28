@@ -31,7 +31,6 @@ class ProcessDataView(APIView):
             except Exception as e:
                 logger.error(f"Error reading file: {str(e)}")
                 return Response({'error': f'Error reading file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
-            
             # Analyze and process the data
             original_analysis = analyze_column_types(df)
             processed_df = infer_and_convert_data_types(df)

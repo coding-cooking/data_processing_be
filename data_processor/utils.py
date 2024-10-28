@@ -59,8 +59,16 @@ def is_datetime(series):
         return False
     
     try:
-        pd.to_datetime(non_null, errors='raise', utc=True)
-        return True
+        # pd.to_datetime(non_null, errors='raise', utc=True)
+        # return True
+        date_time_ser = pd.to_datetime(non_null, errors='coerce', utc=True)
+        valid_count = date_time_ser.notna().sum()
+        total_count = len(series)
+        valid_ratio = valid_count / total_count
+        if valid_ratio > 0.5:
+            return True
+        else:
+            return False
     except ValueError:
         return False
 
