@@ -24,13 +24,14 @@ def infer_and_convert_data_types(df):
         #如果有空行空列要删除，合并单元格的内容咋处理，再看看处理数据别人咋考虑的
 
         # Attempt to convert to numeric
-        numeric_data = pd.to_numeric(df[col], errors='coerce')
-        if not numeric_data.isnull().all():
-            if (numeric_data % 1 == 0).all():
-                df[col] = numeric_data.astype('Int64')  # Use Int64 to allow for NaN values
-            else:
-                df[col] = numeric_data
-            continue
+        if is_numeric(df[col]):
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            if not df[col].isnull().all():
+                if (df[col] % 1 == 0).all():
+                    df[col] = df[col].astype('Int64')  # Use Int64 to allow for NaN values
+                else:
+                    df[col] = df[col]
+                continue
 
         # Attempt to convert to datetime
         if is_datetime(df[col]):
@@ -51,6 +52,22 @@ def infer_and_convert_data_types(df):
         df[col] = df[col].astype('object')
 
     return df
+
+def is_numeric(series):
+    non_null = series.dropna()
+    if len(non_null) == 0:
+        return False
+    try:
+        numeric_ser = pd.to_numeric(non_null, errors='coerce')
+        valid_count = numeric_ser.notna().sum()
+        total_count = len(series)
+        valid_ratio = valid_count / total_count
+        if valid_ratio > 0.5:
+            return True
+        else:
+            return False
+    except ValueError:
+        return False
 
 def is_datetime(series):
     # Check if the series contains datetime strings
