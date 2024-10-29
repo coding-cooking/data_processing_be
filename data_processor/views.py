@@ -23,9 +23,17 @@ class ProcessDataView(APIView):
             # Read the file
             try:
                 if file.name.endswith('.csv'):
-                    df = pd.read_csv(file)
+                    preview = pd.read_csv(file, header=None, nrows=5)
+                    if preview.iloc[0].notna().sum() == 1:
+                        df = pd.read_csv(file, header=1)
+                    else: 
+                        df = pd.read_csv(file, header=0)
                 elif file.name.endswith(('.xls', '.xlsx')):
-                    df = pd.read_excel(file)
+                    preview = pd.read_excel(file, header=None, nrows=5)
+                    if preview.iloc[0].notna().sum() == 1:
+                        df = pd.read_excel(file, header=1)
+                    else: 
+                        df = pd.read_excel(file, header=0)
                 else:
                     return Response({'error': 'Unsupported file format'}, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:

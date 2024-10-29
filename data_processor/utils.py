@@ -10,20 +10,16 @@ class NumpyEncoder(json.JSONEncoder):
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
         elif isinstance(obj, pd.Timestamp):
-            return obj.isoformat()  # Convert Timestamps to string
+            return obj.isoformat() 
         elif isinstance(obj, pd.Timedelta):
-            return str(obj)  # Convert Timedeltas to string
+            return str(obj)  
         return super(NumpyEncoder, self).default(obj)
 
 def infer_and_convert_data_types(df):
     result_df = df.copy()
     for col in df.columns:
-        # Check for all null values
-        # if df[col].isnull().all():
-        #     continue  # Keep as is if all values are null
         series = df[col]
 
-        #如果有空行空列要删除，合并单元格的内容咋处理，再看看处理数据别人咋考虑的
         if is_boolean(series):
             result_df[col] = series.map({'TRUE': True, 'FALSE': False,
                                     '1': True, '0': False,
@@ -32,10 +28,13 @@ def infer_and_convert_data_types(df):
 
         elif is_complex(series):
             result_df[col] = series.apply(lambda x: complex(x) if isinstance(x, str)
-                                                                  and 'j' in x else x).astype('complex')
+                                                                  and 'j' in x else x).astype('string')
             
         elif is_numeric(series):
-            result_df[col] = pd.to_numeric(series, errors='coerce')
+            clean_series = (series.astype(str)
+                    .str.replace(r'(?<=[0-9])[^0-9]', '', regex=True)
+                    .str.strip())
+            result_df[col] = pd.to_numeric(clean_series, errors='coerce')
             if result_df[col].dropna().mod(1).eq(0).all():
                 result_df[col] = result_df[col].astype('Int64')
 
