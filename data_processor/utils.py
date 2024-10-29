@@ -1,19 +1,5 @@
+import numpy as np
 import pandas as pd
-import json
-
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, pd.Timestamp):
-            return obj.isoformat() 
-        elif isinstance(obj, pd.Timedelta):
-            return str(obj)  
-        return super(NumpyEncoder, self).default(obj)
 
 def infer_and_convert_data_types(df):
     result_df = df.copy()
@@ -52,6 +38,7 @@ def infer_and_convert_data_types(df):
 
         else:
             result_df[col] = series.astype('object')
+
     result_df = result_df.select_dtypes(exclude=['complex'])
     return result_df
 

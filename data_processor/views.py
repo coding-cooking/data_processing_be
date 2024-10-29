@@ -6,13 +6,12 @@ from django.shortcuts import render
 import pandas as pd
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .utils import infer_and_convert_data_types, analyze_column_types, NumpyEncoder
+from .utils import infer_and_convert_data_types, analyze_column_types
 from .models import ProcessedFile
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 
 # Create your views here.
-
 logger = logging.getLogger(__name__)
 
 class ProcessDataView(APIView):
@@ -24,21 +23,42 @@ class ProcessDataView(APIView):
             try:
                 if file.name.endswith('.csv'):
                     preview = pd.read_csv(file, header=None, nrows=5)
+                    print("Preview shape:", preview.shape)
+                    print("First row:", preview.iloc[0].tolist())
+                    
+                    file.seek(0)
+                    
                     if preview.iloc[0].notna().sum() == 1:
                         df = pd.read_csv(file, header=1)
-                    else: 
-                        df = pd.read_csv(file, header=0)
+                    else:
+                        if preview.empty:
+                            return Response({'error': 'File appears to be empty'}, status=status.HTTP_400_BAD_REQUEST)
+                        
+                        try:
+                            df = pd.read_csv(file)
+                        except:
+                            file.seek(0)
+                            df = pd.read_csv(file, header=None)
+                            
+                    print("Final DataFrame shape:", df.shape)
+                            
                 elif file.name.endswith(('.xls', '.xlsx')):
                     preview = pd.read_excel(file, header=None, nrows=5)
+                    file.seek(0) 
+                    
                     if preview.iloc[0].notna().sum() == 1:
                         df = pd.read_excel(file, header=1)
-                    else: 
-                        df = pd.read_excel(file, header=0)
+                    else:
+                        if preview.empty:
+                            return Response({'error': 'File appears to be empty'}, status=status.HTTP_400_BAD_REQUEST)
+                        df = pd.read_excel(file)
                 else:
                     return Response({'error': 'Unsupported file format'}, status=status.HTTP_400_BAD_REQUEST)
+                    
             except Exception as e:
                 logger.error(f"Error reading file: {str(e)}")
                 return Response({'error': f'Error reading file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            
             # Analyze and process the data
             original_analysis = analyze_column_types(df)
             processed_df = infer_and_convert_data_types(df)
@@ -56,12 +76,10 @@ class ProcessDataView(APIView):
                 logger.error(f"Invalid JSON data: {str(e)}")
                 return Response({'error': 'Data is not valid JSON'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # return JsonResponse({'data': json_data}, safe=False)
-            # Save processed data
             try:
                 processed_file = ProcessedFile.objects.create(
                     file=file,
-                    processed_data=json_data  # Save valid JSON
+                    processed_data=json_data  
                 )
                 json_data = json.dumps(response_data, cls=DjangoJSONEncoder)
                 return Response({'processed_file_id': processed_file.id, 'data': json_data}, status=status.HTTP_200_OK)
