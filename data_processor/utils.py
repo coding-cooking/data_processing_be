@@ -44,7 +44,7 @@ def infer_and_convert_data_types(df):
             continue
 
         # Check if the column should be categorical
-        if should_be_categorical(df[col]):
+        if is_categorical(df[col]):
             df[col] = pd.Categorical(df[col])
             continue
 
@@ -53,52 +53,56 @@ def infer_and_convert_data_types(df):
 
     return df
 
-def is_numeric(series):
+def is_numeric(series, threshold=0.5):
     non_null = series.dropna()
     if len(non_null) == 0:
         return False
-    try:
-        numeric_ser = pd.to_numeric(non_null, errors='coerce')
-        valid_count = numeric_ser.notna().sum()
-        total_count = len(series)
-        valid_ratio = valid_count / total_count
-        if valid_ratio > 0.5:
-            return True
-        else:
-            return False
-    except ValueError:
-        return False
+    valid_count = pd.to_numeric(non_null, errors='coerce').notna().mean()
+    return valid_count > threshold
 
-def is_datetime(series):
-    # Check if the series contains datetime strings
+
+def is_datetime(series, threshold=0.5):
     non_null = series.dropna()
     if len(non_null) == 0:
         return False
-    
-    try:
-        # pd.to_datetime(non_null, errors='raise', utc=True)
-        # return True
-        date_time_ser = pd.to_datetime(non_null, errors='coerce', utc=True)
-        valid_count = date_time_ser.notna().sum()
-        total_count = len(series)
-        valid_ratio = valid_count / total_count
-        if valid_ratio > 0.5:
-            return True
-        else:
-            return False
-    except ValueError:
+    date_formats = [
+        '%d/%m/%Y',
+        '%Y-%m-%d',
+        '%d-%m-%Y',
+        '%m/%d/%Y',
+        '%Y/%m/%d',
+        '%b %d, %Y',
+        '%B %d, %Y',
+        '%d %b %Y',
+        '%d %B %Y'
+    ]
+    for fmt in date_formats:
+        valid_count = pd.to_datetime(non_null, format=fmt, errors='coerce').notna().mean()
+        if valid_count > threshold:
+            return True  
+    return False
+
+def is_boolean(series, threshold=0.5):
+    non_null = series.dropna().astype(str).str.upper()
+    bool_values = {'TRUE', 'FALSE', '1', '0', 'T', 'F', 'YES', 'NO'}
+    return non_null.isin(bool_values).mean() > threshold
+
+def is_categorical(series, max_unique=10, unique_ratio_threshold=0.8, tolerance=0.2):
+    non_null = series.dropna()
+    if len(non_null) == 0:
         return False
 
-def is_boolean(series):
-    # Check if the series contains only boolean-like values
-    unique_values = series.dropna().unique()
-    boolean_values = {'True', 'False', 'true', 'false', True, False}
-    return set(unique_values).issubset(boolean_values)
+    if is_numeric(series) or is_datetime(series) or is_boolean(series):
+        return False
 
-def should_be_categorical(series):
-    # Determine if a series should be treated as categorical
-    unique_ratio = len(series.unique()) / len(series)
-    return unique_ratio < 0.5 and len(series.unique()) <= 100  # Adjust thresholds as needed
+    is_likely_categorical = non_null.astype(str).str.match(r'^[A-Za-z\s-]+$')
+    categorical_ratio = is_likely_categorical.mean()
+
+    if (categorical_ratio >= (1 - tolerance) and
+            series.nunique(dropna=True) <= max_unique and
+            (series.nunique(dropna=True) / len(series)) <= unique_ratio_threshold):
+        return True
+    return False
 
 def analyze_column_types(df):
     column_analysis = {}
