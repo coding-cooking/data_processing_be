@@ -104,6 +104,13 @@ def is_categorical(series, max_unique=10, unique_ratio_threshold=0.8, tolerance=
         return True
     return False
 
+def is_complex(series):
+    try:
+        return series.dropna().apply(lambda x: isinstance(x, complex) or
+                                               (isinstance(x, str) and 'j' in x)).mean() > 0.5
+    except:
+        return False
+
 def analyze_column_types(df):
     column_analysis = {}
     for col in df.columns:
