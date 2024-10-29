@@ -16,42 +16,45 @@ class NumpyEncoder(json.JSONEncoder):
         return super(NumpyEncoder, self).default(obj)
 
 def infer_and_convert_data_types(df):
+    result_df = df.copy()
     for col in df.columns:
         # Check for all null values
-        if df[col].isnull().all():
-            continue  # Keep as is if all values are null
+        # if df[col].isnull().all():
+        #     continue  # Keep as is if all values are null
+        series = df[col]
 
         #如果有空行空列要删除，合并单元格的内容咋处理，再看看处理数据别人咋考虑的
+        if is_boolean(series):
+            result_df[col] = series.map({'TRUE': True, 'FALSE': False,
+                                    '1': True, '0': False,
+                                    'T': True, 'F': False,
+                                    'YES': True, 'NO': False}).astype('boolean')
 
-        # Attempt to convert to numeric
-        if is_numeric(df[col]):
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            if not df[col].isnull().all():
-                if (df[col] % 1 == 0).all():
-                    df[col] = df[col].astype('Int64')  # Use Int64 to allow for NaN values
-                else:
-                    df[col] = df[col]
-                continue
+        elif is_complex(series):
+            result_df[col] = series.apply(lambda x: complex(x) if isinstance(x, str)
+                                                                  and 'j' in x else x).astype('complex')
+            
+        elif is_numeric(series):
+            result_df[col] = pd.to_numeric(series, errors='coerce')
+            if result_df[col].dropna().mod(1).eq(0).all():
+                result_df[col] = result_df[col].astype('Int64')
 
-        # Attempt to convert to datetime
-        if is_datetime(df[col]):
-            df[col] = pd.to_datetime(df[col], errors='coerce')
-            continue
+        elif is_datetime(series):
+            for fmt in ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y']:
+                try:
+                    result_df[col] = pd.to_datetime(series, format=fmt, errors='coerce')
+                    if not result_df[col].isna().all():
+                        break
+                except:
+                    continue
 
-        # Check for boolean data
-        if is_boolean(df[col]):
-            df[col] = df[col].map({'True': True, 'False': False, 'true': True, 'false': False}).astype('boolean')
-            continue
+        elif is_categorical(series):
+            result_df[col] = series.astype('category')
 
-        # Check if the column should be categorical
-        if is_categorical(df[col]):
-            df[col] = pd.Categorical(df[col])
-            continue
-
-        # If none of the above, keep as object (string) type
-        df[col] = df[col].astype('object')
-
-    return df
+        else:
+            result_df[col] = series.astype('object')
+    result_df = result_df.select_dtypes(exclude=['complex'])
+    return result_df
 
 def is_numeric(series, threshold=0.5):
     non_null = series.dropna()
