@@ -6,13 +6,14 @@ from django.shortcuts import render
 import pandas as pd
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .utils import infer_and_convert_data_types, analyze_column_types
+from .utils import infer_and_convert_data_types, analyze_column_types, process_large_csv
 from .models import ProcessedFile
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 
 # Create your views here.
 logger = logging.getLogger(__name__)
+LARGE_FILE_THRESHOLD = 10 * 1024 * 1024
 
 class ProcessDataView(APIView):
     def post(self, request):
@@ -20,45 +21,42 @@ class ProcessDataView(APIView):
             file = request.FILES['file']
 
             # Read the file
-            try:
-                if file.name.endswith('.csv'):
-                    preview = pd.read_csv(file, header=None, nrows=5)
-                    print("Preview shape:", preview.shape)
-                    print("First row:", preview.iloc[0].tolist())
-                    
-                    file.seek(0)
-                    
-                    if preview.iloc[0].notna().sum() == 1:
-                        df = pd.read_csv(file, header=1)
-                    else:
-                        if preview.empty:
-                            return Response({'error': 'File appears to be empty'}, status=status.HTTP_400_BAD_REQUEST)
+            if file.size > LARGE_FILE_THRESHOLD and file.name.endswith('.csv'):
+                try:
+                    df = process_large_csv(file)
+                except Exception as e:
+                    logger.error(f"Error processing large CSV file: {str(e)}")
+                    return Response({'error': f'Error processing file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                try:
+                    if file.name.endswith('.csv'):
+                        preview = pd.read_csv(file, header=None, nrows=5)
+                        file.seek(0)
                         
-                        try:
+                        if preview.iloc[0].notna().sum() == 1:
+                            df = pd.read_csv(file, header=1)
+                        else:
+                            if preview.empty:
+                                return Response({'error': 'File appears to be empty'}, status=status.HTTP_400_BAD_REQUEST)
                             df = pd.read_csv(file)
-                        except:
-                            file.seek(0)
-                            df = pd.read_csv(file, header=None)
-                            
-                    print("Final DataFrame shape:", df.shape)
-                            
-                elif file.name.endswith(('.xls', '.xlsx')):
-                    preview = pd.read_excel(file, header=None, nrows=5)
-                    file.seek(0) 
-                    
-                    if preview.iloc[0].notna().sum() == 1:
-                        df = pd.read_excel(file, header=1)
+
+                    elif file.name.endswith(('.xls', '.xlsx')):
+                        preview = pd.read_excel(file, engine='openpyxl',header=None, nrows=5)
+                        file.seek(0)
+                        
+                        if preview.iloc[0].notna().sum() == 1:
+                            df = pd.read_excel(file, engine='openpyxl',header=1)
+                        else:
+                            if preview.empty:
+                                return Response({'error': 'File appears to be empty'}, status=status.HTTP_400_BAD_REQUEST)
+                            df = pd.read_excel(file)
                     else:
-                        if preview.empty:
-                            return Response({'error': 'File appears to be empty'}, status=status.HTTP_400_BAD_REQUEST)
-                        df = pd.read_excel(file)
-                else:
-                    return Response({'error': 'Unsupported file format'}, status=status.HTTP_400_BAD_REQUEST)
-                    
-            except Exception as e:
-                logger.error(f"Error reading file: {str(e)}")
-                return Response({'error': f'Error reading file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
-            
+                        return Response({'error': 'Unsupported file format'}, status=status.HTTP_400_BAD_REQUEST)
+
+                except Exception as e:
+                    logger.error(f"Error reading file: {str(e)}")
+                    return Response({'error': f'Error reading file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+                
             # Analyze and process the data
             original_analysis = analyze_column_types(df)
             processed_df = infer_and_convert_data_types(df)

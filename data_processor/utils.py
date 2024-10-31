@@ -18,11 +18,15 @@ def infer_and_convert_data_types(df):
             
         elif is_numeric(series):
             clean_series = (series.astype(str)
-                    .str.replace(r'(?<=[0-9])[^0-9]', '', regex=True)
+                    .str.replace(r'(?<!^)[^\d.-]', '', regex=True)  
+                    .str.replace(r'(?<!^)-', '', regex=True) 
+                    .str.replace(r'\.(?=.*\.)', '', regex=True)   
                     .str.strip())
             result_df[col] = pd.to_numeric(clean_series, errors='coerce')
             if result_df[col].dropna().mod(1).eq(0).all():
                 result_df[col] = result_df[col].astype('Int64')
+            else:
+                result_df[col] = result_df[col].astype('float64')
 
         elif is_datetime(series):
             for fmt in ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y']:
@@ -110,3 +114,10 @@ def analyze_column_types(df):
             'sample_values': df[col].dropna().head(5).tolist()
         }
     return column_analysis
+
+def process_large_csv(file, chunksize=10000):
+    processed_chunks = []
+    for chunk in pd.read_csv(file, chunksize=chunksize):
+        processed_chunk = infer_and_convert_data_types(chunk)
+        processed_chunks.append(processed_chunk)
+    return pd.concat(processed_chunks, ignore_index=True)
