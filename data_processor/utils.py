@@ -7,6 +7,7 @@ def infer_and_convert_data_types(df):
         series = df[col]
 
         if is_boolean(series):
+            cleaned_series = series.astype(str).str.strip().str.upper()
             mapping = {
                 'TRUE': True,
                 'FALSE': False,
@@ -17,7 +18,7 @@ def infer_and_convert_data_types(df):
                 'YES': True,
                 'NO': False
             }
-            result_df[col] = series.map(mapping).astype('boolean')
+            result_df[col] = cleaned_series.map(mapping).astype('boolean')
 
         elif is_complex(series):
             print('Complex detected:', series)
@@ -56,7 +57,7 @@ def infer_and_convert_data_types(df):
 
         else:
             result_df[col] = series.astype('object')
-            
+
     return result_df
 
 def is_numeric(series, threshold=0.5):
