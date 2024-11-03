@@ -34,11 +34,15 @@ class ProcessDataView(APIView):
                         file.seek(0)
                         
                         if preview.iloc[0].notna().sum() == 1:
-                            df = pd.read_csv(file, header=1)
+                            df = pd.read_csv(file, header=1, skip_blank_lines=True)
+                            df = df[df.astype(str).ne('').any(axis=1)]
+                            df = df.dropna(how='all').reset_index(drop=True)
                         else:
                             if preview.empty:
                                 return Response({'error': 'File appears to be empty'}, status=status.HTTP_400_BAD_REQUEST)
-                            df = pd.read_csv(file)
+                            df = pd.read_csv(file, skip_blank_lines=True)
+                            df = df[df.astype(str).ne('').any(axis=1)]
+                            df = df.dropna(how='all').reset_index(drop=True)
 
                     elif file.name.endswith(('.xls', '.xlsx')):
                         preview = pd.read_excel(file, engine='openpyxl',header=None, nrows=5)
@@ -46,13 +50,17 @@ class ProcessDataView(APIView):
                         
                         if preview.iloc[0].notna().sum() == 1:
                             df = pd.read_excel(file, engine='openpyxl',header=1)
+                            df = df[df.astype(str).ne('').any(axis=1)]
+                            df = df.dropna(how='all').reset_index(drop=True)
                         else:
                             if preview.empty:
                                 return Response({'error': 'File appears to be empty'}, status=status.HTTP_400_BAD_REQUEST)
-                            df = pd.read_excel(file)
+                            df = pd.read_excel(file, engine='openpyxl')
+                            df = df[df.astype(str).ne('').any(axis=1)]
+                            df = df.dropna(how='all').reset_index(drop=True)
                     else:
                         return Response({'error': 'Unsupported file format'}, status=status.HTTP_400_BAD_REQUEST)
-
+                
                 except Exception as e:
                     logger.error(f"Error reading file: {str(e)}")
                     return Response({'error': f'Error reading file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)

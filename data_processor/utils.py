@@ -21,7 +21,6 @@ def infer_and_convert_data_types(df):
             result_df[col] = cleaned_series.map(mapping).astype('boolean')
 
         elif is_complex(series):
-            print('Complex detected:', series)
             cleaned_series = (series.astype(str)
                                   .str.strip()
                                   .str.lower()
@@ -41,7 +40,8 @@ def infer_and_convert_data_types(df):
                 result_df[col] = result_df[col].astype('float64')
 
         elif is_datetime(series):
-            for fmt in ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y']:
+            # for fmt in ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y']:
+            for fmt in ['%d/%m/%Y','%Y-%m-%d', '%d-%m-%Y','%m/%d/%Y','%Y/%m/%d','%b %d, %Y','%B %d, %Y','%d %b %Y','%d %B %Y']:
                 try:
                     result_df[col] = pd.to_datetime(series, format=fmt, errors='coerce')
                     if not result_df[col].isna().all():
@@ -117,7 +117,10 @@ def is_complex(series, threshold=0.5):
         count_complex = (
             (non_null_series.apply(lambda x: isinstance(x, complex) or (isinstance(x, str) and 'j' in x)))
         ).sum()
-        return count_complex / len(non_null_series) > threshold
+        if(len(non_null_series) > 0):
+            return count_complex / len(non_null_series) > threshold
+        else:
+            return False
     except AttributeError:
         return False
 
@@ -135,7 +138,6 @@ def analyze_column_types(df):
     for col in df.columns:
         inferred_type = str(df[col].dtype)
         if is_complex(df[col]):
-            print('abcdefg')
             inferred_type = 'complex'
         column_analysis[col] = {
             'be_type': str(df[col].dtype),
@@ -148,7 +150,7 @@ def analyze_column_types(df):
 
 def process_large_csv(file, chunksize=10000):
     processed_chunks = []
-    for chunk in pd.read_csv(file, chunksize=chunksize):
+    for chunk in pd.read_csv(file, chunksize=chunksize, skip_blank_lines=True):
         processed_chunk = infer_and_convert_data_types(chunk)
         processed_chunks.append(processed_chunk)
     return pd.concat(processed_chunks, ignore_index=True)
