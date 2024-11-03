@@ -7,21 +7,32 @@ def infer_and_convert_data_types(df):
         series = df[col]
 
         if is_boolean(series):
-            result_df[col] = series.map({'TRUE': True, 'FALSE': False,
-                                    '1': True, '0': False,
-                                    'T': True, 'F': False,
-                                    'YES': True, 'NO': False}).astype('boolean')
+            mapping = {
+                'TRUE': True,
+                'FALSE': False,
+                '1': True,
+                '0': False,
+                'T': True,
+                'F': False,
+                'YES': True,
+                'NO': False
+            }
+            result_df[col] = series.map(mapping).astype('boolean')
 
         elif is_complex(series):
-            result_df[col] = series.apply(lambda x: complex(x) if isinstance(x, str)
-                                                                  and 'j' in x else x).astype('string')
-            
+            print('Complex detected:', series)
+            cleaned_series = (series.astype(str)
+                                  .str.strip()
+                                  .str.lower()
+                                  .str.replace('i', 'j', regex=False)) 
+            result_df[col] = cleaned_series.astype('string')
+
         elif is_numeric(series):
             clean_series = (series.astype(str)
+                    .str.strip()
                     .str.replace(r'(?<!^)[^\d.-]', '', regex=True)  
                     .str.replace(r'(?<!^)-', '', regex=True) 
-                    .str.replace(r'\.(?=.*\.)', '', regex=True)   
-                    .str.strip())
+                    .str.replace(r'\.(?=.*\.)', '', regex=True))
             result_df[col] = pd.to_numeric(clean_series, errors='coerce')
             if result_df[col].dropna().mod(1).eq(0).all():
                 result_df[col] = result_df[col].astype('Int64')
@@ -38,12 +49,14 @@ def infer_and_convert_data_types(df):
                     continue
 
         elif is_categorical(series):
-            result_df[col] = series.astype('category')
+            cleaned_series = (series.astype(str)
+                                  .str.strip()
+                                  .str.upper())
+            result_df[col] = cleaned_series.astype('category')
 
         else:
             result_df[col] = series.astype('object')
-
-    result_df = result_df.select_dtypes(exclude=['complex'])
+            
     return result_df
 
 def is_numeric(series, threshold=0.5):
@@ -97,18 +110,35 @@ def is_categorical(series, max_unique=10, unique_ratio_threshold=0.8, tolerance=
         return True
     return False
 
-def is_complex(series):
+def is_complex(series, threshold=0.5):
     try:
-        return series.dropna().apply(lambda x: isinstance(x, complex) or
-                                               (isinstance(x, str) and 'j' in x)).mean() > 0.5
-    except:
+        non_null_series = series.dropna()
+        count_complex = (
+            (non_null_series.apply(lambda x: isinstance(x, complex) or (isinstance(x, str) and 'j' in x)))
+        ).sum()
+        return count_complex / len(non_null_series) > threshold
+    except AttributeError:
         return False
 
 def analyze_column_types(df):
     column_analysis = {}
+    type_mapping = {
+        'object': 'Text',
+        'boolean': 'Boolean',
+        'Int64': 'Integer',
+        'float64': 'Float',
+        'datetime64[ns]': 'Date',
+        'category': 'Category',
+        'complex': 'Complex'
+    }
     for col in df.columns:
+        inferred_type = str(df[col].dtype)
+        if is_complex(df[col]):
+            print('abcdefg')
+            inferred_type = 'complex'
         column_analysis[col] = {
-            'inferred_type': str(df[col].dtype),
+            'be_type': str(df[col].dtype),
+            'fe_type': type_mapping.get(inferred_type, 'Unknown'),
             'unique_values': int(len(df[col].unique())),
             'null_count': int(df[col].isnull().sum()),
             'sample_values': df[col].dropna().head(5).tolist()
