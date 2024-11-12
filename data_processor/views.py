@@ -87,7 +87,6 @@ class ProcessDataView(APIView):
                     file=file,
                     processed_data=json_data  
                 )
-                json_data = json.dumps(response_data, cls=DjangoJSONEncoder)
                 return Response({'processed_file_id': processed_file.id, 'data': json_data}, status=status.HTTP_200_OK)
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON: {str(e)}")

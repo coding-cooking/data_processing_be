@@ -69,25 +69,34 @@ def is_numeric(series, threshold=0.5):
 
 
 def is_datetime(series, threshold=0.5):
-    non_null = series.dropna()
+    non_null = series[series.astype(str).str.strip() != ''].dropna()
     if len(non_null) == 0:
         return False
-    date_formats = [
-        '%d/%m/%Y',
-        '%Y-%m-%d',
-        '%d-%m-%Y',
-        '%m/%d/%Y',
-        '%Y/%m/%d',
-        '%b %d, %Y',
-        '%B %d, %Y',
-        '%d %b %Y',
-        '%d %B %Y'
-    ]
-    for fmt in date_formats:
-        valid_count = pd.to_datetime(non_null, format=fmt, errors='coerce').notna().mean()
-        if valid_count > threshold:
-            return True  
-    return False
+    valid_dates = pd.Series([pd.NaT] * len(non_null), index=non_null.index)
+    formats = [
+            '%d/%m/%Y', '%m/%d/%Y',  
+            '%Y-%m-%d',              
+            '%B %d, %Y', '%d %B %Y', 
+            '%b %d, %Y', '%d %b %Y', 
+            '%Y/%m/%d',              
+            '%a, %b %d, %Y',       
+        ]
+    for idx, val in non_null.items():
+        if str(val).isdigit():
+            try:
+                valid_dates[idx] = pd.to_datetime(float(val), unit='s')
+                continue
+            except:
+                pass
+        for fmt in formats:
+            try:
+                valid_dates[idx] = pd.to_datetime(val, format=fmt)
+                if pd.notna(valid_dates[idx]):
+                    break
+            except:
+                continue
+    valid_count = valid_dates.notna().mean()
+    return valid_count >= threshold
 
 def is_boolean(series, threshold=0.5):
     non_null = series.dropna().astype(str).str.upper()
