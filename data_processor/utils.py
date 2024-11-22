@@ -121,15 +121,18 @@ def is_categorical(series, max_unique=10, unique_ratio_threshold=0.8, tolerance=
     return False
 
 def is_complex(series, threshold=0.5):
+    def check_complex(x):
+        return isinstance(x, complex) or (
+                isinstance(x, str) and
+                any(c in x for c in ['+', '-']) and
+                'j' in x
+        )
     try:
         non_null_series = series.dropna()
-        count_complex = (
-            (non_null_series.apply(lambda x: isinstance(x, complex) or (isinstance(x, str) and 'j' in x)))
-        ).sum()
-        if(len(non_null_series) > 0):
-            return count_complex / len(non_null_series) > threshold
-        else:
+        if len(non_null_series) == 0:
             return False
+        count_complex = sum(check_complex(x) for x in non_null_series)
+        return count_complex / len(non_null_series) >= threshold
     except AttributeError:
         return False
 
