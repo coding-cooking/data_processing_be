@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from dateutil.parser import parse
 
 def infer_and_convert_data_types(df):
     result_df = df.copy()
@@ -40,14 +41,7 @@ def infer_and_convert_data_types(df):
                 result_df[col] = result_df[col].astype('float64')
 
         elif is_datetime(series):
-            # for fmt in ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y']:
-            for fmt in ['%d/%m/%Y','%Y-%m-%d', '%d-%m-%Y','%m/%d/%Y','%Y/%m/%d','%b %d, %Y','%B %d, %Y','%d %b %Y','%d %B %Y']:
-                try:
-                    result_df[col] = pd.to_datetime(series, format=fmt, errors='coerce')
-                    if not result_df[col].isna().all():
-                        break
-                except:
-                    continue
+            result_df[col] = series.apply(parse_date)
 
         elif is_categorical(series):
             cleaned_series = (series.astype(str)
@@ -64,38 +58,19 @@ def is_numeric(series, threshold=0.5):
     non_null = series.dropna()
     if len(non_null) == 0:
         return False
-    valid_count = pd.to_numeric(non_null, errors='coerce').notna().mean()
+    cleaned_series = non_null.astype(str).str.replace(',', '', regex=True)
+    valid_count = pd.to_numeric(cleaned_series, errors='coerce').notna().mean()
     return valid_count > threshold
 
 
 def is_datetime(series, threshold=0.5):
-    non_null = series[series.astype(str).str.strip() != ''].dropna()
+    non_null = series.dropna().astype(str).str.strip()
     if len(non_null) == 0:
         return False
-    valid_dates = pd.Series([pd.NaT] * len(non_null), index=non_null.index)
-    formats = [
-            '%d/%m/%Y', '%m/%d/%Y',  
-            '%Y-%m-%d',              
-            '%B %d, %Y', '%d %B %Y', 
-            '%b %d, %Y', '%d %b %Y', 
-            '%Y/%m/%d',              
-            '%a, %b %d, %Y',       
-        ]
-    for idx, val in non_null.items():
-        if str(val).isdigit():
-            try:
-                valid_dates[idx] = pd.to_datetime(float(val), unit='s')
-                continue
-            except:
-                pass
-        for fmt in formats:
-            try:
-                valid_dates[idx] = pd.to_datetime(val, format=fmt)
-                if pd.notna(valid_dates[idx]):
-                    break
-            except:
-                continue
-    valid_count = valid_dates.notna().mean()
+
+    parsed_dates = non_null.apply(parse_date)
+    valid_count = parsed_dates.notna().mean()
+
     return valid_count >= threshold
 
 def is_boolean(series, threshold=0.5):
@@ -104,13 +79,11 @@ def is_boolean(series, threshold=0.5):
     return non_null.isin(bool_values).mean() > threshold
 
 def is_categorical(series, max_unique=10, unique_ratio_threshold=0.8, tolerance=0.2):
+    if is_numeric(series) or is_datetime(series) or is_boolean(series):
+        return False
     non_null = series.dropna()
     if len(non_null) == 0:
         return False
-
-    if is_numeric(series) or is_datetime(series) or is_boolean(series):
-        return False
-
     is_likely_categorical = non_null.astype(str).str.match(r'^[A-Za-z\s-]+$')
     categorical_ratio = is_likely_categorical.mean()
 
@@ -135,6 +108,43 @@ def is_complex(series, threshold=0.5):
         return count_complex / len(non_null_series) >= threshold
     except AttributeError:
         return False
+
+def parse_date(val):
+    try:
+        # Reject complex numbers, booleans
+        if isinstance(val, (bool, complex)):
+            return pd.NaT
+
+        # Handle pure numeric strings
+        val_str = str(val).strip()
+        if val_str.isdigit():
+            if len(val_str) == 8:
+                try:
+                    parsed_date = pd.to_datetime(val_str, format='%Y%m%d')
+                    if parsed_date.year >= 1900 and parsed_date.year <= 2100:
+                        return parsed_date
+                    else:
+                        return pd.to_datetime(val_str, unit='s')
+                except Exception:
+                    return pd.to_datetime(val_str, unit='s')
+            else:
+                num = int(val_str)
+                if 0 <= num <= 2147483647:
+                    return pd.to_datetime(val_str, unit='s')
+                elif 0 <= num <= 2147483647000:
+                    return pd.to_datetime(val_str, unit='ms')
+
+        # Use dateutil for general parsing
+        parsed = parse(str(val), fuzzy=False)
+
+        # Additional validation: year should be within reasonable range
+        if parsed.year < 1000 or parsed.year > 2100:
+            return pd.NaT
+
+        return parsed
+
+    except (ValueError, OverflowError, TypeError):
+        return pd.NaT
 
 def analyze_column_types(df):
     column_analysis = {}
